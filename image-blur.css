@@ -6,3 +6,16 @@ body {
 #id_baseimage {
 	display: none;
 }
+
+.hidden {
+	display: none;
+}
+
+#id_photos {
+	width: 768px;
+	height: 576px;
+}
+#id_photos img, #id_photos canvas {
+	position: absolute;
+}
+
