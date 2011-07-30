@@ -1,25 +1,13 @@
 
-var transition = null;
-
-$(document).ready(function(){
-	transition = ImageBlur.init("id_photos");
-
-	$("#id_demo").click(run_demo);	
-	$("#id_stop").click(function(){
-		transition.stop();	
-	})
-	;	
-})
-;
-
-function run_demo()
-{
-	transition.run();
-}
 
 var ImageBlur = {
+	pause_time: 3500,
+	
 	init: function(container_id){
 		var stages = 5;
+		
+		//Completion counter object.
+		counter = {'count': 0, 'total': 0};
 		
 		//Configure blur factors for each stage.
 		var step = stages / 5.0;
@@ -35,26 +23,31 @@ var ImageBlur = {
 		var animations_set = [];
 		
 		//Process each image.
-		$("#" + container_id + " img").each(function(index){
+		var first_img_id = null;
+		jQuery("#" + container_id + " img").each(function(index){
 			//Create blur animations for each image.
 			var transformations = [];
-			var orig_img = $(this);
-			animations_set.push(orig_img);
-			$.each(blur_factors, function(idx, blur_factor){
-				var new_jq_img = orig_img.clone().insertAfter(orig_img);
-				//new_jq_img.attr('id', ImageBlur.uuid());
-				new_jq_img.attr('id', "id-blur-" + index + "-" + idx);
+			var orig_img = jQuery(this);
+			var orig_img_id = ImageBlur.get_id(orig_img);
+			if(first_img_id == null) first_img_id = orig_img_id;
+			animations_set.push(orig_img_id);
+			jQuery.each(blur_factors, function(idx, blur_factor){
+				var new_jq_img = orig_img.clone().css('zIndex', 1).insertAfter(orig_img);
+				var img_id = ImageBlur.get_id(new_jq_img, true);
 				var new_img = new_jq_img[0];
-				var new_elm = Pixastic.process(new_img, "blurfast", {'amount': blur_factor});
-				var new_jq_elm = $(new_elm);
-				transformations.push(new_jq_elm);
-				animations_set.push(new_jq_elm);
+				counter.total += 1;
+				var new_elm = Pixastic.process(new_img, "blurfast", {'amount': blur_factor}, function(res){
+						//Increment the count.
+						counter.count += 1;
+					});
+				transformations.push(img_id);
+				animations_set.push(img_id);
 			})
 			;
 			//Add the transformations to the animation sequence.
 			//Sequence should go:
 			//most blurry ... blurry ... not blurry ... blurry ... most blurry
-			animation_sequence = animation_sequence.concat(transformations.slice(0).reverse(), [orig_img], transformations);
+			animation_sequence = animation_sequence.concat(transformations.slice(0).reverse(), [orig_img_id], transformations);
 		})
 		;
 		
@@ -62,23 +55,32 @@ var ImageBlur = {
 		//Makes calculating indexes simpler.
 		animation_sequence = animation_sequence.slice(blur_factor_count).concat(animation_sequence.slice(0, blur_factor_count))
 		
-		//Adjust the zIndexes.
+		//Record the frame count.
 		var frame_count = animation_sequence.length;
-		$.each(animation_sequence, function(idx, jq_obj){
-			jq_obj.css("zIndex", frame_count - idx);
-		})
-		;
+		
+		//Set the initial z-Index.
+		jQuery('#' + first_img_id).css('zIndex', 3);
 		
 		return {
+			'counter': counter, 				// Completion counter.
 			'animations': animation_sequence,
 			'animations_set': animations_set,
 			'current_frame': 0,
 			'frame_count': frame_count,
 			'delay': 75,
-			'pause': 1500,
+			'pause': ImageBlur.pause_time,
 			'pause_modulo': (blur_factors.length * 2 + 1),
 			'run_flag': false,
 			'run': function(){
+				//Delay running until all callbacks have returned.
+				if(this.counter.count < this.counter.total)
+				{
+					var self = this;
+					window.setTimeout(function(){
+						self.run();
+					}, 1000)
+					;
+				}
 				this.run_flag = true;
 				ImageBlur.animate.apply(this);
 			},
@@ -88,6 +90,23 @@ var ImageBlur = {
 		}
 		;
 	},	
+	
+	//Get the ID of a jQuery object or assign and
+	//return one if it does not exist.
+	get_id: function(jqobj, force_new_id)
+	{
+		if(typeof(force_new_id) == 'undefined')
+		{
+			force_new_id = false;
+		}
+		var elm_id = jqobj.attr('id');
+		if(typeof(elm_id) == 'undefined' || force_new_id || elm_id == "")
+		{
+			elm_id = ImageBlur.uuid();
+			jqobj.attr('id', elm_id);
+		}
+		return elm_id;
+	},
 	
 	uuid: function()
 	{
@@ -117,12 +136,13 @@ var ImageBlur = {
 		var animations = this.animations;
 		var animations_set = this.animations_set;
 		var frame_count = this.frame_count;
-		$.each(animations_set, function(idx, jq_obj){
-			jq_obj.css("zIndex", 0);
+		jQuery.each(animations_set, function(idx, obj_id){
+			var jq_obj = jQuery("#" + obj_id);
+			jq_obj.css("zIndex", 1);
 		})
 		;
-		animations[current_frame].css("zIndex", 2);
-		animations[(current_frame + 1) % frame_count].css("zIndex", 1);
+		jQuery("#" + animations[current_frame]).css("zIndex", 3);
+		jQuery("#" + (animations[(current_frame + 1) % frame_count])).css("zIndex", 2);
 		
 		//
 		window.setTimeout(function(){
