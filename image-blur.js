@@ -1,5 +1,7 @@
 
-
+/*
+Copyright 2011 Carl Waldbieser
+*/
 var ImageBlur = {
 	pause_time: 3500,
 	
