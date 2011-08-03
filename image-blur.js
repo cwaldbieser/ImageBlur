@@ -7,9 +7,16 @@ var ImageBlur = {
 	
 	init: function(container_id){
 		var stages = 5;
+		var delay = 75;
 		
-		//Completion counter object.
-		counter = {'count': 0, 'total': 0};
+		if(!ImageBlur.supports_canvas())
+		{
+			return {
+				'run': function(){},
+				'stop': function(){}	
+			}
+			;
+		}
 		
 		//Configure blur factors for each stage.
 		var step = stages / 5.0;
@@ -24,6 +31,11 @@ var ImageBlur = {
 		//The set of frames.
 		var animations_set = [];
 		
+		var process_queue = [];
+		
+		//The map of processed image IDs.
+		var ready_map = {};
+		
 		//Process each image.
 		var first_img_id = null;
 		jQuery("#" + container_id + " img").each(function(index){
@@ -31,17 +43,25 @@ var ImageBlur = {
 			var transformations = [];
 			var orig_img = jQuery(this);
 			var orig_img_id = ImageBlur.get_id(orig_img);
+			ready_map[orig_img_id] = true;
 			if(first_img_id == null) first_img_id = orig_img_id;
 			animations_set.push(orig_img_id);
 			jQuery.each(blur_factors, function(idx, blur_factor){
 				var new_jq_img = orig_img.clone().css('zIndex', 1).insertAfter(orig_img);
 				var img_id = ImageBlur.get_id(new_jq_img, true);
 				var new_img = new_jq_img[0];
-				counter.total += 1;
-				var new_elm = Pixastic.process(new_img, "blurfast", {'amount': blur_factor}, function(res){
-						//Increment the count.
-						counter.count += 1;
-					});
+				process_queue = [new_img].concat(process_queue);
+				window.setTimeout(function(){
+					var img_obj = process_queue.pop();
+					
+					var new_elm = Pixastic.process(img_obj, "blurfast", {'amount': blur_factor}, function(res){
+							//Mark this ID as ready.
+							var my_id = jQuery(res).attr('id');
+							rval.ready_map[my_id] = true;
+						});
+				}, (index) * ImageBlur.pause_time + (idx + 1) * delay)
+				;
+				
 				transformations.push(img_id);
 				animations_set.push(img_id);
 			})
@@ -63,26 +83,17 @@ var ImageBlur = {
 		//Set the initial z-Index.
 		jQuery('#' + first_img_id).css('zIndex', 3);
 		
-		return {
-			'counter': counter, 				// Completion counter.
+		var rval = {
+			'ready_map': ready_map,
 			'animations': animation_sequence,
 			'animations_set': animations_set,
 			'current_frame': 0,
 			'frame_count': frame_count,
-			'delay': 75,
+			'delay': delay,
 			'pause': ImageBlur.pause_time,
 			'pause_modulo': (blur_factors.length * 2 + 1),
 			'run_flag': false,
 			'run': function(){
-				//Delay running until all callbacks have returned.
-				if(this.counter.count < this.counter.total)
-				{
-					var self = this;
-					window.setTimeout(function(){
-						self.run();
-					}, 1000)
-					;
-				}
 				this.run_flag = true;
 				ImageBlur.animate.apply(this);
 			},
@@ -91,7 +102,13 @@ var ImageBlur = {
 			},
 		}
 		;
+		return rval;
 	},	
+	
+	//Check if the HTML 5 <canvas> tag is supported ...
+	supports_canvas: function() {
+  		return !!document.createElement('canvas').getContext;
+	},
 	
 	//Get the ID of a jQuery object or assign and
 	//return one if it does not exist.
@@ -123,29 +140,33 @@ var ImageBlur = {
 	{
 		if(!this.run_flag) return;
 		
+		var self = this;
+		var delay = this.delay;
+		
 		//Advance the current frame.
 		var current_frame = this.current_frame;
 		current_frame++;
 		current_frame %= this.frame_count;
-		this.current_frame = current_frame;
-		
-		//Determine the delay time.
-		var delay = this.delay;
-		if(current_frame % this.pause_modulo == 0) delay = this.pause;
-		var self = this;
-		
-		//Rotate the z-indexes.
 		var animations = this.animations;
-		var animations_set = this.animations_set;
-		var frame_count = this.frame_count;
-		jQuery.each(animations_set, function(idx, obj_id){
-			var jq_obj = jQuery("#" + obj_id);
-			jq_obj.css("zIndex", 1);
-		})
-		;
-		jQuery("#" + animations[current_frame]).css("zIndex", 3);
-		jQuery("#" + (animations[(current_frame + 1) % frame_count])).css("zIndex", 2);
-		
+		var img_id = animations[current_frame];
+		if(img_id in this.ready_map)
+		{
+			this.current_frame = current_frame;
+			
+			//Determine the delay time.
+			if(current_frame % this.pause_modulo == 0) delay = this.pause;
+			
+			//Rotate the z-indexes.
+			var animations_set = this.animations_set;
+			var frame_count = this.frame_count;
+			jQuery.each(animations_set, function(idx, obj_id){
+				var jq_obj = jQuery("#" + obj_id);
+				jq_obj.css("zIndex", 1);
+			})
+			;
+			jQuery("#" + animations[current_frame]).css("zIndex", 3);
+			jQuery("#" + (animations[(current_frame + 1) % frame_count])).css("zIndex", 2);
+		}
 		//
 		window.setTimeout(function(){
 			ImageBlur.animate.apply(self);	
