@@ -6,7 +6,8 @@ var ImageBlur = {
 	pause_time: 3500,
 	
 	init: function(container_id){
-		var stages = 5;
+        var max_radius = 21.0;
+		var stages = 3;
 		var delay = 75;
 		
 		if(!ImageBlur.supports_canvas())
@@ -18,11 +19,11 @@ var ImageBlur = {
 			;
 		}
 		
-		//Configure blur factors for each stage.
-		var step = stages / 5.0;
+		//Configure blur factors for each stage.        
+		var step = max_radius / stages;
 		var blur_factors = [];
-		for(i=step; i <= 5.0; i += step) blur_factors.push(i);
-		if(blur_factors.length < stages) blur_factors.push(5.0);
+		for(i=step; i <= max_radius; i += step) blur_factors.push(i);
+		if(blur_factors.length < stages) blur_factors.push(max_radius);
 		
 		//Sequence for animations.
 		animation_sequence = [];
@@ -47,19 +48,26 @@ var ImageBlur = {
 			if(first_img_id == null) first_img_id = orig_img_id;
 			animations_set.push(orig_img_id);
 			jQuery.each(blur_factors, function(idx, blur_factor){
-				var new_jq_img = orig_img.clone().css('zIndex', 1).insertAfter(orig_img);
+				//var new_jq_img = orig_img.clone().css('zIndex', 1).insertAfter(orig_img);
+                var new_jq_img = jQuery('<canvas></canvas>').css('zIndex', 1).insertAfter(orig_img);
 				var img_id = ImageBlur.get_id(new_jq_img, true);
 				var new_img = new_jq_img[0];
-				process_queue = [new_img].concat(process_queue);
+				process_queue = [orig_img_id, new_img, blur_factor].concat(process_queue);
 				window.setTimeout(function(){
+                    var radius = process_queue.pop();
 					var img_obj = process_queue.pop();
-					
+                    var src_img_id = process_queue.pop();                    
+/*					
 					var new_elm = Pixastic.process(img_obj, "blurfast", {'amount': blur_factor}, function(res){
 							//Mark this ID as ready.
 							var my_id = jQuery(res).attr('id');
 							rval.ready_map[my_id] = true;
 						});
-				}, (index) * ImageBlur.pause_time + (idx + 1) * delay)
+*/
+                    var my_id = jQuery(img_obj).attr('id')
+                    stackBoxBlurImage(src_img_id, my_id, radius, false, 1.0);
+                    rval.ready_map[my_id] = true;
+				}, (index) * (ImageBlur.pause_time) + (idx + 1) * delay)
 				;
 				
 				transformations.push(img_id);
