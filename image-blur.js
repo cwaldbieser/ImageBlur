@@ -1,10 +1,32 @@
 
 /*
-Copyright 2011 Carl Waldbieser
+    Copyright (C) 2011  Carl F. Waldbieser
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 var ImageBlur = {
-    pause_time: 3500,
+    //Defaults
+    'defaults': {
+        //The time spent displaying a non-blurred image.
+        'pause_time': 3500,
+        //The number of blurred frames of an image.
+        'stages': 3,
+        //The delay between frames.
+        'delay': 75
+    },
     
+    //A label that identifies the back end being used.
     backend: function(){
         if(typeof(stackBoxBlurImage) != 'undefined') return 'stackboxblur'; 
         else if(typeof(Pixastic) != 'undefined' && Pixastic.Actions.blurfast && Pixastic.Actions.blurfast) return 'pixastic.blurfast';
@@ -12,6 +34,7 @@ var ImageBlur = {
         return 'stackboxblur';
     }(),
 
+    //Image processor back ends.
     processors: {
         'stackboxblur': {
             'defaults': {
@@ -47,9 +70,13 @@ var ImageBlur = {
         }
     },
 
+    //Initialize the transition.
     init: function(container_id, options){
+        //If HTML canvas is not supported, display the first image.
         if(!ImageBlur.supports_canvas())
         {
+            jQuery('#' + container_id + ' img').css('zIndex', 1);
+            jQuery('#' + container_id + ' img:first').css('zIndex', 3);
             return {
                 'run': function(){},
                 'stop': function(){}    
@@ -61,9 +88,18 @@ var ImageBlur = {
         var backend = ImageBlur.backend;
         var processor = ImageBlur.processors[backend];
         
-        var blur_amount = processor.defaults.blur_amount;
-        var stages = processor.defaults.stages;
-        var delay = processor.defaults.delay;
+        //Function for getting settings.
+        var get_setting = function(name){
+            if(typeof(options) != 'undefined' && name in options) return options[name];
+            if(name in processor.defaults) return processor.defaults[name];
+            if(name in ImageBlur.defaults) return ImageBlur.defaults[name];
+            return null;
+        }
+        ;
+        
+        var blur_amount = get_setting('blur_amount');
+        var stages = get_setting('stages');
+        var delay = get_setting('delay');
         
         //Configure blur factors for each stage.        
         var step = blur_amount / stages;
@@ -138,7 +174,7 @@ var ImageBlur = {
             'current_frame': 0,
             'frame_count': frame_count,
             'delay': delay,
-            'pause': ImageBlur.pause_time,
+            'pause': get_setting('pause_time'),
             'pause_modulo': (blur_factors.length * 2 + 1),
             'run_flag': false,
             'run': function(){
@@ -215,7 +251,7 @@ var ImageBlur = {
             jQuery("#" + animations[current_frame]).css("zIndex", 3);
             jQuery("#" + (animations[(current_frame + 1) % frame_count])).css("zIndex", 2);
         }
-        //
+        //Schedule the next animation frame.
         window.setTimeout(function(){
             ImageBlur.animate.apply(self);  
         }, delay)
